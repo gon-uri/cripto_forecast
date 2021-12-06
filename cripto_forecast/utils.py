@@ -22,7 +22,7 @@ def series_train_test_split(X,Y,faulty_indices,test_ratio = 0.8):
 
 
 class TimeseriesDataset(torch.utils.data.Dataset):   
-    def __init__(self, X, y, faulty_indices, std_series,PASOS_FUTUROS, NOISE_LEVEL, seq_len=10):
+    def __init__(self, X, y, faulty_indices, std_series,PASOS_FUTURO, NOISE_LEVEL, seq_len=10):
         self.X = X
         self.y = y
         self.seq_len = seq_len
