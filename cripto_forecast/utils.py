@@ -22,11 +22,12 @@ def series_train_test_split(X,Y,faulty_indices,test_ratio = 0.8):
 
 
 class TimeseriesDataset(torch.utils.data.Dataset):   
-    def __init__(self, X, y, faulty_indices, std_series,PASOS_FUTURO, NOISE_LEVEL, seq_len=10):
+    def __init__(self, X, y, faulty_indices, std_series, PASOS_FUTURO, NOISE_LEVEL, seq_len=10):
         self.X = X
         self.y = y
         self.seq_len = seq_len
         self.faulty_indices = faulty_indices
+        self.PASOS_FUTURO = PASOS_FUTURO
         self.diccionario_indices = self.generate_dict()
 
     def generate_dict(self):
@@ -34,7 +35,7 @@ class TimeseriesDataset(torch.utils.data.Dataset):
         numero_total = len(self.X)
 
         # Cantidad de pasos necesarios para definir una instancia
-        ventanita = np.ones(self.seq_len + PASOS_FUTURO)
+        ventanita = np.ones(self.seq_len + self.PASOS_FUTURO)
 
         # Definimos las regiones donde no hay valores faltantes en la ventana
         fallas = np.zeros(numero_total)
