@@ -67,6 +67,7 @@ class TimeseriesDataset(torch.utils.data.Dataset):
         target = self.y[dict_index+self.seq_len]
         return (instance,target)
 
+
 class MyConv1dPadSame(nn.Module):
     """
     extend nn.Conv1d to support SAME padding
