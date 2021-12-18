@@ -1,0 +1,16 @@
+BATCH_SIZE: 64
+SEQ_LEN: 600
+TEST_RATIO: 0.8
+COIN: close_btc
+PORCENTAJE: 0.3
+PASOS_FUTURO: 60
+NOISE_LEVEL: 10
+REGRESSION: 1
+REDUCTION_STEP: 10
+base_filters: 128
+kernel_size: 8
+n_block: 8
+n_classes: 1
+stride: 2
+groups: 8
+lr: 3e-05
