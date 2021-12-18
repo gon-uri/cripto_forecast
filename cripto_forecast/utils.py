@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torch.distributions.normal import Normal
+
 
 def series_train_test_split(X,Y,faulty_indices,test_ratio = 0.8):
     total_len = len(X)
@@ -20,22 +22,126 @@ def series_train_test_split(X,Y,faulty_indices,test_ratio = 0.8):
             faulty_indices_test.append(indice-train_length)
     return X_train, Y_train, X_test, Y_test, faulty_indices_train, faulty_indices_test
 
+class DataTransformer:
+    def __init__(self,std_series):
+
+        # self.gaussian = Normal(0.0, 0.5)
+
+        self.transforms = [
+            # self.dropout,
+            self.add_gaussian_noise,
+            # self.dropout_and_noise,
+            self.chunk_dropout,
+            self.chunk_copy,
+            self.chunk_swap,
+            # self.alternate_dropout,
+            self.channel_dropout,
+            self.identity,
+        ]
+
+        self.dropout_p = 0.2
+        self.chunk_length = 0.2
+
+    def transform(self, x):
+        def _fn(x):
+            return np.random.choice(self.transforms)(x)
+
+        return _fn(x)
+
+    def add_gaussian_noise(self, x):
+        # x = x + self.gaussian.sample(x.shape)
+        # return x
+        for i in range(x.shape[1]):
+            noise = np.random.normal(0,NOISE_LEVEL*std_series[i]/100,x.shape[0])
+            x[:,i] = x[:,i] + noise
+        return x
+
+    def dropout_and_noise(self, x):
+        x = self.add_gaussian_noise(x)
+        return self.transforms[0](x)
+
+    def chunk_dropout(self, x):
+        chunk_size = int(len(x) * self.chunk_length)
+        chunk_start = np.random.randint(0, len(x) - chunk_size)
+        x[chunk_start: chunk_start + chunk_size] = 0
+        return x
+
+    def chunk_copy(self, x):
+        chunk_length = int(len(x) * self.chunk_length)
+        chunk_start = np.random.randint(chunk_length * 2,
+                                        len(x) - chunk_length * 2)
+        chunk_end = chunk_start + chunk_length
+        chunk = x[chunk_start: chunk_end].copy()
+
+        direction = np.random.choice(['left', 'right'])
+        if direction == 'left':
+            start = chunk_start - chunk_length
+            end = chunk_start
+        else:
+            start = chunk_end
+            end = chunk_end + chunk_length
+        x[start: end] = chunk
+        return x
+
+    def chunk_swap(self, x):
+        # get a random chunk of the sequence
+        chunk_length = int(len(x) * self.chunk_length)
+        chunk_start = np.random.randint(chunk_length * 2,
+                                        len(x) - chunk_length * 2)
+
+        chunk_end = chunk_start + chunk_length
+        chunk = x[chunk_start: chunk_end]
+
+        direction = np.random.choice(['left', 'right'])
+        if direction == 'left':
+            start = chunk_start - chunk_length
+            end = chunk_start
+        else:
+            start = chunk_end
+            end = chunk_end + chunk_length
+
+        # swap
+        tmp = x[start: end].copy()
+        x[start: end] = chunk
+        x[chunk_start: chunk_end] = tmp
+        return x
+
+    def dropout(self, x):
+        points_to_dropout = np.argwhere(
+            np.random.choice([True, False], size=len(x),
+                             p=[self.dropout_p, 1 - self.dropout_p]))
+        x[points_to_dropout.reshape(-1)] = 0
+        return x
+
+    def alternate_dropout(self, x):
+        x[::2] = 0
+        return x
+
+    def channel_dropout(self, x):
+        num_channels = x.shape[1]
+        channel = np.random.choice(list(range(num_channels)))
+        x[:, channel] = 0
+        return x
+
+    def identity(self, x):
+        return x
 
 class TimeseriesDataset(torch.utils.data.Dataset):   
-    def __init__(self, X, y, faulty_indices, std_series, PASOS_FUTURO, NOISE_LEVEL, seq_len=10):
+    def __init__(self, X, y, faulty_indices, std_series, PASOS_FUTURO, NOISE_LEVEL, REDUCTION_STEP , seq_len=10, is_train = 1):
         self.X = X
         self.y = y
         self.seq_len = seq_len
         self.faulty_indices = faulty_indices
-        self.PASOS_FUTURO = PASOS_FUTURO
         self.diccionario_indices = self.generate_dict()
+        self.transformer = DataTransformer(std_series)
+        self.is_train = is_train
 
     def generate_dict(self):
         # Numero total de instancias en el Dataset
         numero_total = len(self.X)
 
         # Cantidad de pasos necesarios para definir una instancia
-        ventanita = np.ones(self.seq_len + self.PASOS_FUTURO)
+        ventanita = np.ones(self.seq_len + PASOS_FUTURO)
 
         # Definimos las regiones donde no hay valores faltantes en la ventana
         fallas = np.zeros(numero_total)
@@ -60,14 +166,23 @@ class TimeseriesDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         dict_index = self.diccionario_indices[index]
         instance = self.X[dict_index:dict_index+self.seq_len]
-        for i in range(X.shape[1]):
-            noise = np.random.normal(0,NOISE_LEVEL*std_series[i]/100,self.seq_len)
-            instance[:,i] = instance[:,i] + noise
-        instance = np.transpose(instance, (1, 0))       
+        # for i in range(X.shape[1]):
+        #     noise = np.random.normal(0,NOISE_LEVEL*std_series[i]/100,self.seq_len)
+        #     instance[:,i] = instance[:,i] + noise
         target = self.y[dict_index+self.seq_len]
+
+        instance = instance[len(instance)%REDUCTION_STEP:]
+        instance = np.add.reduceat(instance, np.arange(0, len(instance), REDUCTION_STEP),axis = 0)
+        if self.is_train == 1:
+            instance = self.transformer.transform(instance)
+            scaling_factor = np.random.uniform(0.5, 1.5)
+            instance = instance * scaling_factor
+            if REGRESSION == 1:
+                target = target * scaling_factor
+                
+        instance = np.transpose(instance, (1, 0))       
         return (instance,target)
-
-
+    
 class MyConv1dPadSame(nn.Module):
     """
     extend nn.Conv1d to support SAME padding
