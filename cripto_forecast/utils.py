@@ -132,16 +132,19 @@ class TimeseriesDataset(torch.utils.data.Dataset):
         self.y = y
         self.seq_len = seq_len
         self.faulty_indices = faulty_indices
-        self.diccionario_indices = self.generate_dict()
         self.transformer = DataTransformer(std_series)
         self.is_train = is_train
+        self.PASOS_FUTURO = PASOS_FUTURO
+        self.NOISE_LEVEL = NOISE_LEVEL
+        self.REDUCTION_STEP = REDUCTION_STEP
+        self.diccionario_indices = self.generate_dict()
 
     def generate_dict(self):
         # Numero total de instancias en el Dataset
         numero_total = len(self.X)
 
         # Cantidad de pasos necesarios para definir una instancia
-        ventanita = np.ones(self.seq_len + PASOS_FUTURO)
+        ventanita = np.ones(self.seq_len + self.PASOS_FUTURO)
 
         # Definimos las regiones donde no hay valores faltantes en la ventana
         fallas = np.zeros(numero_total)
@@ -167,12 +170,12 @@ class TimeseriesDataset(torch.utils.data.Dataset):
         dict_index = self.diccionario_indices[index]
         instance = self.X[dict_index:dict_index+self.seq_len]
         # for i in range(X.shape[1]):
-        #     noise = np.random.normal(0,NOISE_LEVEL*std_series[i]/100,self.seq_len)
+        #     noise = np.random.normal(0,self.NOISE_LEVEL*std_series[i]/100,self.seq_len)
         #     instance[:,i] = instance[:,i] + noise
         target = self.y[dict_index+self.seq_len]
 
-        instance = instance[len(instance)%REDUCTION_STEP:]
-        instance = np.add.reduceat(instance, np.arange(0, len(instance), REDUCTION_STEP),axis = 0)
+        instance = instance[len(instance)%self.REDUCTION_STEP:]
+        instance = np.add.reduceat(instance, np.arange(0, len(instance), self.REDUCTION_STEP),axis = 0)
         if self.is_train == 1:
             instance = self.transformer.transform(instance)
             scaling_factor = np.random.uniform(0.5, 1.5)
